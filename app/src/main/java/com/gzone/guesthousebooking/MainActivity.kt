@@ -5,12 +5,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.gzone.guesthousebooking.ui.booking.BookingScreen
-import com.gzone.guesthousebooking.ui.booking.BookingViewModel
+import com.gzone.guesthousebooking.viewmodel.BookingViewModel
 import com.gzone.guesthousebooking.ui.theme.GuestHouseBookingTheme
 
 class MainActivity : ComponentActivity() {
@@ -21,8 +23,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             GuestHouseBookingTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    val viewModel = BookingViewModel()
-                    BookingScreen(viewModel = viewModel)
+                    val bookingViewModel: BookingViewModel = viewModel()
+                    BookingScreen(
+                        viewModel = bookingViewModel,
+                        modifier = Modifier.padding(innerPadding)
+                    )
                 }
             }
         }
@@ -33,7 +38,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun BookingPreview() {
     GuestHouseBookingTheme {
-        val viewModel = BookingViewModel()
-        BookingScreen(viewModel = viewModel)
+        val previewViewModel = BookingViewModel()
+        BookingScreen(viewModel = previewViewModel)
     }
 }
