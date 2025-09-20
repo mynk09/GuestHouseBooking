@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     val bookingViewModel: BookingViewModel = viewModel()
                     BookingScreen(
-                        viewModel = bookingViewModel,
+                        bookingViewModel = bookingViewModel,   // ✅ fixed parameter name
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -39,6 +39,6 @@ class MainActivity : ComponentActivity() {
 fun BookingPreview() {
     GuestHouseBookingTheme {
         val previewViewModel = BookingViewModel()
-        BookingScreen(viewModel = previewViewModel)
+        BookingScreen(bookingViewModel = previewViewModel)  // ✅ fixed parameter name
     }
 }
