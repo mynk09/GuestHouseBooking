@@ -22,11 +22,11 @@ class BookingViewModel : ViewModel() {
     private val _checkOutDate = MutableStateFlow<Date?>(null)
     val checkOutDate = _checkOutDate.asStateFlow()
 
-    fun setCheckInDate(date: Date) {
+    fun setCheckInDate(date: Date?) {
         _checkInDate.value = date
     }
 
-    fun setCheckOutDate(date: Date) {
+    fun setCheckOutDate(date: Date?) {
         _checkOutDate.value = date
     }
 
