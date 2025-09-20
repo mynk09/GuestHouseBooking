@@ -2,17 +2,16 @@ package com.gzone.guesthousebooking.ui.booking
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.gzone.guesthousebooking.viewmodel.BookingViewModel
 import java.text.SimpleDateFormat
@@ -36,13 +35,25 @@ fun BookingScreen(
     // Observe bookings from ViewModel
     val bookings by bookingViewModel.bookings.collectAsState()
 
-    // Date pickers
+    // Observe dates from ViewModel
+    val checkInDate by bookingViewModel.checkInDate.collectAsState()
+    val checkOutDate by bookingViewModel.checkOutDate.collectAsState()
+
+    // Date pickers with validation
     val checkInDatePicker = remember {
         DatePickerDialog(
             context,
             { _, year, month, dayOfMonth ->
                 calendar.set(year, month, dayOfMonth)
-                bookingViewModel.setCheckInDate(calendar.time)
+                val selectedDate = calendar.time
+                bookingViewModel.setCheckInDate(selectedDate)
+
+                // If check-out is before new check-in, reset it
+                checkOutDate?.let {
+                    if (it.before(selectedDate)) {
+                        bookingViewModel.setCheckOutDate(null)
+                    }
+                }
             },
             calendar.get(Calendar.YEAR),
             calendar.get(Calendar.MONTH),
@@ -50,30 +61,41 @@ fun BookingScreen(
         )
     }
 
-    val checkOutDatePicker = remember {
+    val checkOutDatePicker = remember(checkInDate) {
         DatePickerDialog(
             context,
             { _, year, month, dayOfMonth ->
                 calendar.set(year, month, dayOfMonth)
-                bookingViewModel.setCheckOutDate(calendar.time)
+                val selectedDate = calendar.time
+
+                // Validate: Check-out cannot be before check-in
+                checkInDate?.let { checkIn ->
+                    if (selectedDate.after(checkIn)) {
+                        bookingViewModel.setCheckOutDate(selectedDate)
+                    }
+                }
             },
             calendar.get(Calendar.YEAR),
             calendar.get(Calendar.MONTH),
             calendar.get(Calendar.DAY_OF_MONTH)
-        )
+        ).apply {
+            // Set min date for check-out to check-in date or today
+            checkInDate?.let {
+                datePicker.minDate = it.time
+            } ?: run {
+                datePicker.minDate = System.currentTimeMillis() - 1000 // Today
+            }
+        }
     }
 
-    // Observe dates from ViewModel
-    val checkInDate by bookingViewModel.checkInDate.collectAsState()
-    val checkOutDate by bookingViewModel.checkOutDate.collectAsState()
-
+    // FIXED SCROLLING: Use verticalScroll for the entire content
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState()) // ENABLE SCROLLING FOR WHOLE SCREEN
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Changed title to "TRACK YOUR BOOKINGS"
         Text(
             text = "TRACK YOUR BOOKINGS",
             style = MaterialTheme.typography.headlineSmall,
@@ -85,8 +107,7 @@ fun BookingScreen(
             value = guestName,
             onValueChange = { guestName = it },
             label = { Text("Guest Name") },
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Next)
+            modifier = Modifier.fillMaxWidth()
         )
 
         // Room Number
@@ -94,20 +115,19 @@ fun BookingScreen(
             value = roomNumber,
             onValueChange = { roomNumber = it },
             label = { Text("Room Number") },
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Next)
+            modifier = Modifier.fillMaxWidth()
         )
 
-        // Date Selection Row - LARGER fields for better visibility
+        // Date Selection Row - FIXED DATE VISIBILITY
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Check-in Date - LARGER field
+            // Check-in Date - FIXED: Larger box for better date visibility
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(64.dp) // Increased height for better visibility
+                    .height(64.dp) // Increased height
             ) {
                 OutlinedTextField(
                     value = checkInDate?.let { dateFormatter.format(it) } ?: "",
@@ -115,20 +135,21 @@ fun BookingScreen(
                     label = { Text("Check-in") },
                     readOnly = true,
                     modifier = Modifier.fillMaxSize(),
+                    // FIXED: Single line and better text visibility
+                    singleLine = true,
                     trailingIcon = {
                         IconButton(onClick = { checkInDatePicker.show() }) {
                             Icon(Icons.Default.DateRange, contentDescription = "Pick Check-in Date")
                         }
-                    },
-                    singleLine = true // Ensure text doesn't get cut off
+                    }
                 )
             }
 
-            // Check-out Date - LARGER field
+            // Check-out Date - FIXED: Larger box for better date visibility
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(64.dp) // Increased height for better visibility
+                    .height(64.dp) // Increased height
             ) {
                 OutlinedTextField(
                     value = checkOutDate?.let { dateFormatter.format(it) } ?: "",
@@ -136,17 +157,30 @@ fun BookingScreen(
                     label = { Text("Check-out") },
                     readOnly = true,
                     modifier = Modifier.fillMaxSize(),
+                    // FIXED: Single line and better text visibility
+                    singleLine = true,
                     trailingIcon = {
-                        IconButton(onClick = { checkOutDatePicker.show() }) {
-                            Icon(Icons.Default.DateRange, contentDescription = "Pick Check-out Date")
+                        IconButton(
+                            onClick = {
+                                if (checkInDate != null) {
+                                    checkOutDatePicker.show()
+                                }
+                            },
+                            enabled = checkInDate != null
+                        ) {
+                            Icon(
+                                Icons.Default.DateRange,
+                                contentDescription = "Pick Check-out Date"
+                            )
                         }
                     },
-                    singleLine = true // Ensure text doesn't get cut off
+                    // Visual indication when disabled
+                    enabled = checkInDate != null
                 )
             }
         }
 
-        // Number of Guests and Contact - FIXED ALIGNMENT
+        // Number of Guests and Contact
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -154,34 +188,34 @@ fun BookingScreen(
             OutlinedTextField(
                 value = numberOfGuests,
                 onValueChange = { numberOfGuests = it },
-                label = { Text("Number of Guests") },
+                label = { Text("Guests") },
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 56.dp),
-                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Next),
-                keyboardActions = KeyboardActions(onNext = { /* Focus moves to next field */ })
+                    .heightIn(min = 50.dp)
             )
 
             OutlinedTextField(
                 value = contactNumber,
                 onValueChange = { contactNumber = it },
-                label = { Text("Contact Number") },
+                label = { Text("Contact") },
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 56.dp),
-                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { /* Keyboard dismissed */ })
+                    .heightIn(min = 50.dp)
             )
         }
 
-        // Add Booking Button
+        // Add Booking Button with validation
         Button(
             onClick = {
+                // SAFE: We already checked these are not null in enabled condition
+                val safeCheckInDate = checkInDate!!
+                val safeCheckOutDate = checkOutDate!!
+
                 bookingViewModel.addBooking(
                     guestName = guestName,
                     roomNumber = roomNumber.toIntOrNull() ?: 0,
-                    checkInDate = checkInDate ?: Date(),
-                    checkOutDate = checkOutDate ?: Date(),
+                    checkInDate = safeCheckInDate,
+                    checkOutDate = safeCheckOutDate,
                     numberOfGuests = numberOfGuests.toIntOrNull() ?: 1,
                     contactNumber = contactNumber
                 )
@@ -190,15 +224,23 @@ fun BookingScreen(
                 roomNumber = ""
                 numberOfGuests = ""
                 contactNumber = ""
+                bookingViewModel.setCheckInDate(null)
+                bookingViewModel.setCheckOutDate(null)
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = guestName.isNotBlank() &&
+                    roomNumber.isNotBlank() &&
+                    numberOfGuests.isNotBlank() &&
+                    contactNumber.isNotBlank() &&
+                    checkInDate != null &&
+                    checkOutDate != null
         ) {
             Text("Add Booking")
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Bookings List
+        // Bookings List - This will now scroll with the entire screen
         if (bookings.isNotEmpty()) {
             Text(
                 text = "Current Bookings:",
@@ -207,39 +249,58 @@ fun BookingScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            LazyColumn {
-                itemsIndexed(bookings) { index, booking ->
-                    BookingItem(booking = booking, bookingNumber = index + 1)
+            // Show bookings in a column with SERIAL NUMBERS
+            Column {
+                bookings.forEachIndexed { index, booking ->
+                    BookingItem(booking = booking, serialNumber = index + 1)
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
+        } else {
+            // Empty state
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No bookings yet.\nAdd your first booking above!",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
+
+        // Add some extra space at the bottom for better scrolling
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
 @Composable
-fun BookingItem(booking: com.gzone.guesthousebooking.data.model.Booking, bookingNumber: Int) {
+fun BookingItem(booking: com.gzone.guesthousebooking.data.model.Booking, serialNumber: Int) {
     val formatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Added Booking Number and shortened ID
+            // FIXED: Added both Serial Number AND Short ID
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Booking #$bookingNumber",
+                    text = "Booking #$serialNumber",
                     style = MaterialTheme.typography.bodyLarge.copy(
                         color = MaterialTheme.colorScheme.primary
                     )
                 )
                 Text(
-                    text = "ID: ${booking.id.take(8)}...",
+                    text = "ID: ${booking.id.take(6)}...",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
@@ -247,20 +308,18 @@ fun BookingItem(booking: com.gzone.guesthousebooking.data.model.Booking, booking
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text(text = "Guest: ${booking.guestName}", style = MaterialTheme.typography.bodyLarge)
-            Text(text = "Room: ${booking.roomNumber}")
-            Text(text = "Guests: ${booking.numberOfGuests}")
-            Text(text = "Contact: ${booking.contactNumber}")
-
-            // Improved date display
+            Text(text = "Guest: ${booking.guestName}", style = MaterialTheme.typography.bodyMedium)
+            Text(text = "Room: ${booking.roomNumber}", style = MaterialTheme.typography.bodyMedium)
+            Text(text = "Guests: ${booking.numberOfGuests}", style = MaterialTheme.typography.bodyMedium)
+            Text(text = "Contact: ${booking.contactNumber}", style = MaterialTheme.typography.bodyMedium)
             Text(
                 text = "Dates: ${formatter.format(booking.checkInDate)} to ${formatter.format(booking.checkOutDate)}",
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(vertical = 4.dp)
             )
-
-            // Color-coded payment status
             Text(
-                text = "Payment Status: ${booking.paymentStatus}",
+                text = "Status: ${booking.paymentStatus}",
+                style = MaterialTheme.typography.bodyMedium,
                 color = when (booking.paymentStatus.toString().uppercase()) {
                     "PAID" -> MaterialTheme.colorScheme.primary
                     "PENDING" -> MaterialTheme.colorScheme.error
