@@ -1,21 +1,43 @@
 package com.gzone.guesthousebooking.data.model
 
-import java.util.Date
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.PrimaryKey
+import java.util.*
 
-data class Booking(
-    val id: String,              // Unique booking ID
-    val guestName: String,       // Name of the guest
-    val roomNumber: Int,         // Assigned room number
-    val checkInDate: Date,       // Check-in date
-    val checkOutDate: Date,      // Check-out date
-    val numberOfGuests: Int,     // Total guests staying
-    val contactNumber: String,   // Guest contact info
-    val paymentStatus: PaymentStatus = PaymentStatus.PENDING
+@Entity(
+    tableName = "bookings",
+    indices = [Index("roomNumber")],  // ✅ Improves query performance
+    foreignKeys = [ForeignKey(
+        entity = GuestRoom::class,
+        parentColumns = ["number"],
+        childColumns = ["roomNumber"],
+        onDelete = ForeignKey.CASCADE
+    )]
 )
+data class Booking(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val guestName: String,
+    val roomNumber: Int,
+    val checkInDate: Date,  // ✅ Will be converted via TypeConverters
+    val checkOutDate: Date, // ✅ Will be converted via TypeConverters
+    val numberOfGuests: Int,
+    val contactNumber: String,
+    val advanceAmount: Double = 0.0,
+    val totalAmount: Double = 0.0,
+    val paymentStatus: PaymentStatus = PaymentStatus.PENDING,
+    val notes: String = "",
+    val createdAt: Date = Date()  // ✅ Will be converted via TypeConverters
+) {
+    init {
+        require(guestName.isNotBlank()) { "Guest name cannot be blank" }
+        require(roomNumber > 0) { "Room number must be positive" }
+        require(numberOfGuests > 0) { "Number of guests must be positive" }
+        require(checkOutDate.after(checkInDate)) { "Check-out must be after check-in" }
+    }
+}
 
-// Enum to track booking payment state
 enum class PaymentStatus {
-    PENDING,
-    PAID,
-    CANCELLED
+    PENDING, PAID, CANCELLED, REFUNDED
 }
