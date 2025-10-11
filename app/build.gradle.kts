@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.gzone.guesthousebooking"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 34  // ✅ Changed from 34 to match compileSdk
         versionCode = 1
         versionName = "1.0"

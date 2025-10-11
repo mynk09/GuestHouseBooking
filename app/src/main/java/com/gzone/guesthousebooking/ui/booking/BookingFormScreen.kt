@@ -36,10 +36,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.gzone.guesthousebooking.data.model.GuestRoom
 import com.gzone.guesthousebooking.viewmodel.BookingViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -47,8 +47,9 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
+// ✅ RENAMED THE FUNCTION TO MATCH THE FILE AND ITS PURPOSE
 @Composable
-fun BookingScreen(
+fun BookingFormScreen(
     bookingViewModel: BookingViewModel,
     modifier: Modifier = Modifier
 ) {
@@ -67,31 +68,14 @@ fun BookingScreen(
     var selectedRoomNumbers by remember { mutableStateOf<List<Int>>(emptyList()) }
     var expanded by remember { mutableStateOf(false) } // Dropdown expanded state
 
-    // Observe bookings from ViewModel
-    val bookings by bookingViewModel.bookings.collectAsState()
+    // ✅ GET DATA FROM THE CORRECT, UNIFIED STATE
+    val calendarState by bookingViewModel.calendarUiState.collectAsState()
+    val rooms = calendarState.rooms
+    val bookings = calendarState.bookings
 
-    // Observe dates from ViewModel
+    // Observe dates from ViewModel (this part is correct)
     val checkInDate by bookingViewModel.checkInDate.collectAsState()
     val checkOutDate by bookingViewModel.checkOutDate.collectAsState()
-
-    // Available rooms
-    val availableRooms = remember {
-        listOf(
-            GuestRoom(101, "Single", 1, "AC,TV", 1500.0),
-            GuestRoom(102, "Double", 2, "AC,TV", 2500.0),
-            GuestRoom(103, "Double", 2, "AC,TV", 2500.0),
-            GuestRoom(104, "Double", 2, "AC,TV", 2500.0),
-            GuestRoom(105, "Suite", 4, "AC,TV,Kitchen", 5000.0),
-            GuestRoom(106, "Single", 1, "AC,TV", 1500.0),
-            GuestRoom(107, "Single", 1, "AC,TV", 1500.0),
-            GuestRoom(108, "Double", 2, "AC,TV", 2500.0),
-            GuestRoom(109, "Double", 2, "AC,TV", 2500.0),
-            GuestRoom(110, "Suite", 4, "AC,TV,Kitchen", 5000.0),
-            GuestRoom(201, "Single", 1, "AC,TV", 1600.0),
-            GuestRoom(202, "Double", 2, "AC,TV", 2600.0),
-            GuestRoom(511, "Premium Suite", 4, "AC,TV,Kitchen,Jacuzzi", 6000.0)
-        )
-    }
 
     // Date pickers
     val checkInDatePicker = remember {
@@ -132,7 +116,7 @@ fun BookingScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "TRACK YOUR BOOKINGS",
+            text = "GUEST HOUSE BOOKINGS",
             style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.fillMaxWidth()
         )
@@ -146,7 +130,7 @@ fun BookingScreen(
             placeholder = { Text("Enter guest or group name") }
         )
 
-        // ✅ DROPDOWN ROOM SELECTION (ORIGINAL FUNCTIONALITY)
+        // Dropdown Room Selection
         Box(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = if (selectedRoomNumbers.isNotEmpty())
@@ -164,18 +148,19 @@ fun BookingScreen(
                 }
             )
 
-            // Dropdown menu with checkboxes
+            // ✅ POPULATE DROPDOWN FROM VIEWMODEL, NOT A HARDCODED LIST
             DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
                 modifier = Modifier.fillMaxWidth(0.9f)
             ) {
-                availableRooms.forEach { room ->
+                rooms.forEach { room ->
                     DropdownMenuItem(
                         text = {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
@@ -236,7 +221,6 @@ fun BookingScreen(
                     }
                 )
             }
-
             Box(modifier = Modifier
                 .weight(1f)
                 .height(64.dp)) {
@@ -249,15 +233,10 @@ fun BookingScreen(
                     singleLine = true,
                     trailingIcon = {
                         IconButton(
-                            onClick = {
-                                if (checkInDate != null) checkOutDatePicker.show()
-                            },
+                            onClick = { if (checkInDate != null) checkOutDatePicker.show() },
                             enabled = checkInDate != null
                         ) {
-                            Icon(
-                                Icons.Default.DateRange,
-                                contentDescription = "Pick Check-out Date"
-                            )
+                            Icon(Icons.Default.DateRange, contentDescription = "Pick Check-out Date")
                         }
                     },
                     enabled = checkInDate != null
@@ -277,7 +256,6 @@ fun BookingScreen(
                 modifier = Modifier.weight(1f),
                 placeholder = { Text("Total guests") }
             )
-
             OutlinedTextField(
                 value = contactNumber,
                 onValueChange = { contactNumber = it },
@@ -290,28 +268,26 @@ fun BookingScreen(
         // Add Booking Button
         Button(
             onClick = {
-                val safeCheckInDate = checkInDate ?: Date()
-                val safeCheckOutDate = checkOutDate ?: Date().apply {
-                    time += 24 * 60 * 60 * 1000
-                }
+                val safeCheckInDate = checkInDate
+                val safeCheckOutDate = checkOutDate
 
-                // Create separate booking for each selected room
-                selectedRoomNumbers.forEach { roomNumber ->
-                    bookingViewModel.addBooking(
-                        guestName = guestName,
-                        roomNumber = roomNumber,
-                        checkInDate = safeCheckInDate,
-                        checkOutDate = safeCheckOutDate,
-                        numberOfGuests = numberOfGuests.toIntOrNull() ?: 1,
-                        contactNumber = contactNumber
-                    )
+                if (safeCheckInDate != null && safeCheckOutDate != null) {
+                    selectedRoomNumbers.forEach { roomNumber ->
+                        bookingViewModel.addBooking(
+                            guestName = guestName,
+                            roomNumber = roomNumber,
+                            checkInDate = safeCheckInDate,
+                            checkOutDate = safeCheckOutDate,
+                            numberOfGuests = numberOfGuests.toIntOrNull() ?: 1,
+                            contactNumber = contactNumber
+                        )
+                    }
+                    // Clear form after submission
+                    guestName = ""
+                    selectedRoomNumbers = emptyList()
+                    numberOfGuests = ""
+                    contactNumber = ""
                 }
-
-                // Clear form but keep dates for convenience
-                guestName = ""
-                selectedRoomNumbers = emptyList()
-                numberOfGuests = ""
-                contactNumber = ""
             },
             modifier = Modifier.fillMaxWidth(),
             enabled = guestName.isNotBlank() &&
@@ -321,25 +297,19 @@ fun BookingScreen(
                     checkInDate != null &&
                     checkOutDate != null
         ) {
-            Text("Add ${selectedRoomNumbers.size} Booking(s)")
+            Text("Add ${if (selectedRoomNumbers.size > 1) "${selectedRoomNumbers.size} Bookings" else "Booking"}")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // Bookings List
         if (bookings.isNotEmpty()) {
-            Text(
-                text = "Current Bookings:",
-                style = MaterialTheme.typography.titleMedium
-            )
-
+            Text(text = "Current Bookings:", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
-
             Column {
-                bookings.forEachIndexed { index, booking ->
-                    BookingItem(
+                bookings.sortedBy { it.checkInDate }.forEach { booking ->
+                    BookingListItem(
                         booking = booking,
-                        serialNumber = index + 1,
                         onDelete = { bookingViewModel.deleteBooking(booking) }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -349,7 +319,7 @@ fun BookingScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp),
+                    .height(150.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -359,15 +329,14 @@ fun BookingScreen(
                 )
             }
         }
-
         Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
+// ✅ RENAMED THIS COMPOSABLE TO BE MORE SPECIFIC
 @Composable
-fun BookingItem(
+fun BookingListItem(
     booking: com.gzone.guesthousebooking.data.model.Booking,
-    serialNumber: Int,
     onDelete: () -> Unit
 ) {
     val formatter = remember {
@@ -377,10 +346,8 @@ fun BookingItem(
     }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -389,56 +356,31 @@ fun BookingItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Booking #$serialNumber",
-                    style = MaterialTheme.typography.bodyLarge.copy(
+                    text = "Room ${booking.roomNumber} - ${booking.guestName}",
+                    style = MaterialTheme.typography.titleMedium.copy(
                         color = MaterialTheme.colorScheme.primary
                     )
                 )
                 IconButton(onClick = onDelete) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Delete Booking",
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                    Icon(Icons.Default.Delete, "Delete Booking", tint = MaterialTheme.colorScheme.error)
                 }
             }
-
             Spacer(modifier = Modifier.height(8.dp))
+            Text("Guests: ${booking.numberOfGuests} • Contact: ${booking.contactNumber}", style = MaterialTheme.typography.bodyMedium)
             Text(
-                text = "Guest: ${booking.guestName}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                text = "Room: ${booking.roomNumber}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                text = "Guests: ${booking.numberOfGuests}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                text = "Contact: ${booking.contactNumber}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                text = "Dates: ${formatter.format(booking.checkInDate)} to ${
-                    formatter.format(
-                        booking.checkOutDate
-                    )
-                }",
+                text = "Dates: ${formatter.format(booking.checkInDate)} to ${formatter.format(booking.checkOutDate)}",
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(vertical = 4.dp)
+                modifier = Modifier.padding(top = 4.dp)
             )
             Text(
                 text = "Status: ${booking.paymentStatus}",
                 style = MaterialTheme.typography.bodyMedium,
-                color = when (booking.paymentStatus.toString().uppercase()) {
-                    "PAID" -> MaterialTheme.colorScheme.primary
-                    "PENDING" -> MaterialTheme.colorScheme.error
+                color = when (booking.paymentStatus) {
+                    com.gzone.guesthousebooking.data.model.PaymentStatus.PAID -> Color(0xFF008000) // Green
+                    com.gzone.guesthousebooking.data.model.PaymentStatus.PENDING -> MaterialTheme.colorScheme.error
                     else -> MaterialTheme.colorScheme.onSurface
                 }
             )
         }
     }
-
 }
