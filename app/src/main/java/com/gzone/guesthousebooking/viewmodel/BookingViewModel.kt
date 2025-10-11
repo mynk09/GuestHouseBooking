@@ -1,23 +1,46 @@
 package com.gzone.guesthousebooking.viewmodel
 
 import android.app.Application
+import android.os.Build
+import androidx.annotation.RequiresApi
+import androidx.compose.foundation.layout.size
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.gzone.guesthousebooking.data.AppDatabase
 import com.gzone.guesthousebooking.data.model.Booking
+import com.gzone.guesthousebooking.data.model.GuestRoom
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.*
 
+
+fun Date.toLocalDate(): LocalDate {
+    return this.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+}
+
+
+data class BookingCalendarUiState(
+    val rooms: List<GuestRoom> = emptyList(),
+    val bookings: List<Booking> = emptyList(),
+    val timelineStart: LocalDate = LocalDate.now(),
+    val dateRange: Int = 30, // Default number of days to show
+    val isLoading: Boolean = true
+)
 class BookingViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = AppDatabase.getDatabase(application)
     private val bookingDao = database.bookingDao()
 
-    private val _bookings = MutableStateFlow<List<Booking>>(emptyList())
-    val bookings: StateFlow<List<Booking>> = _bookings.asStateFlow()
+    private val roomDao = database.roomDao()
+
+    private val _calendarUiState = MutableStateFlow(BookingCalendarUiState())
+    val calendarUiState: StateFlow<BookingCalendarUiState> = _calendarUiState.asStateFlow()
+
 
     private val _checkInDate = MutableStateFlow<Date?>(null)
     val checkInDate = _checkInDate.asStateFlow()
@@ -26,15 +49,27 @@ class BookingViewModel(application: Application) : AndroidViewModel(application)
     val checkOutDate = _checkOutDate.asStateFlow()
 
     init {
-        loadBookingsFromDatabase()
+        loadCalendarData()
     }
 
-    private fun loadBookingsFromDatabase() {
+    private fun loadCalendarData() {
         viewModelScope.launch {
-            bookingDao.getAllBookings().collect { bookingsList ->
-                _bookings.value = bookingsList
-                println("📱 Loaded ${bookingsList.size} bookings from database")
-            }
+            _calendarUiState.value = _calendarUiState.value.copy(isLoading = true)
+            println("🔄 Loading calendar data...")
+
+            // Combine data streams from both DAOs
+            roomDao.getAllRooms() // Ensure this exists in your RoomDao
+                .combine(bookingDao.getAllBookings()) { rooms, bookings ->
+                    BookingCalendarUiState(
+                        rooms = rooms,
+                        bookings = bookings,
+                        timelineStart = LocalDate.now(),
+                        isLoading = false
+                    )
+                }.collect { combinedState ->
+                    _calendarUiState.value = combinedState
+                    println("✅ Calendar data loaded: ${combinedState.rooms.size} rooms, ${combinedState.bookings.size} bookings.")
+                }
         }
     }
 

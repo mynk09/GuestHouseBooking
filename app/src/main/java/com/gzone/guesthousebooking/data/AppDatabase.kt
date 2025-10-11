@@ -31,7 +31,6 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                     .fallbackToDestructiveMigration()
                     .build()
-
                 Instance = instance
                 instance
             }
