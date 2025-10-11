@@ -1,14 +1,39 @@
 package com.gzone.guesthousebooking.ui.booking
 
 import android.app.DatePickerDialog
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -17,7 +42,10 @@ import androidx.compose.ui.unit.dp
 import com.gzone.guesthousebooking.data.model.GuestRoom
 import com.gzone.guesthousebooking.viewmodel.BookingViewModel
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 @Composable
 fun BookingScreen(
@@ -25,7 +53,11 @@ fun BookingScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val dateFormatter = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
+    val dateFormatter = remember {
+        SimpleDateFormat("dd-MMM-yy", Locale.US).apply {
+            timeZone = TimeZone.getDefault()
+        }
+    }
     val calendar = Calendar.getInstance()
 
     // State for form fields
@@ -187,7 +219,9 @@ fun BookingScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Box(modifier = Modifier.weight(1f).height(64.dp)) {
+            Box(modifier = Modifier
+                .weight(1f)
+                .height(64.dp)) {
                 OutlinedTextField(
                     value = checkInDate?.let { dateFormatter.format(it) } ?: "",
                     onValueChange = {},
@@ -203,7 +237,9 @@ fun BookingScreen(
                 )
             }
 
-            Box(modifier = Modifier.weight(1f).height(64.dp)) {
+            Box(modifier = Modifier
+                .weight(1f)
+                .height(64.dp)) {
                 OutlinedTextField(
                     value = checkOutDate?.let { dateFormatter.format(it) } ?: "",
                     onValueChange = {},
@@ -218,7 +254,10 @@ fun BookingScreen(
                             },
                             enabled = checkInDate != null
                         ) {
-                            Icon(Icons.Default.DateRange, contentDescription = "Pick Check-out Date")
+                            Icon(
+                                Icons.Default.DateRange,
+                                contentDescription = "Pick Check-out Date"
+                            )
                         }
                     },
                     enabled = checkInDate != null
@@ -298,7 +337,11 @@ fun BookingScreen(
 
             Column {
                 bookings.forEachIndexed { index, booking ->
-                    BookingItem(booking = booking, serialNumber = index + 1)
+                    BookingItem(
+                        booking = booking,
+                        serialNumber = index + 1,
+                        onDelete = { bookingViewModel.deleteBooking(booking) }
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
@@ -322,8 +365,16 @@ fun BookingScreen(
 }
 
 @Composable
-fun BookingItem(booking: com.gzone.guesthousebooking.data.model.Booking, serialNumber: Int) {
-    val formatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+fun BookingItem(
+    booking: com.gzone.guesthousebooking.data.model.Booking,
+    serialNumber: Int,
+    onDelete: () -> Unit
+) {
+    val formatter = remember {
+        SimpleDateFormat("dd-MMM-yy", Locale.US).apply {
+            timeZone = TimeZone.getDefault()
+        }
+    }
 
     Card(
         modifier = Modifier
@@ -332,19 +383,49 @@ fun BookingItem(booking: com.gzone.guesthousebooking.data.model.Booking, serialN
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Booking #$serialNumber",
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    color = MaterialTheme.colorScheme.primary
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Booking #$serialNumber",
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 )
-            )
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete Booking",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Guest: ${booking.guestName}", style = MaterialTheme.typography.bodyMedium)
-            Text(text = "Room: ${booking.roomNumber}", style = MaterialTheme.typography.bodyMedium)
-            Text(text = "Guests: ${booking.numberOfGuests}", style = MaterialTheme.typography.bodyMedium)
-            Text(text = "Contact: ${booking.contactNumber}", style = MaterialTheme.typography.bodyMedium)
             Text(
-                text = "Dates: ${formatter.format(booking.checkInDate)} to ${formatter.format(booking.checkOutDate)}",
+                text = "Guest: ${booking.guestName}",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = "Room: ${booking.roomNumber}",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = "Guests: ${booking.numberOfGuests}",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = "Contact: ${booking.contactNumber}",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = "Dates: ${formatter.format(booking.checkInDate)} to ${
+                    formatter.format(
+                        booking.checkOutDate
+                    )
+                }",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(vertical = 4.dp)
             )
@@ -359,4 +440,5 @@ fun BookingItem(booking: com.gzone.guesthousebooking.data.model.Booking, serialN
             )
         }
     }
+
 }
