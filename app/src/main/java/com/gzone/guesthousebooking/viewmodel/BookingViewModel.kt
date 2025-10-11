@@ -76,6 +76,13 @@ class BookingViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun deleteBooking(booking: Booking) {
+        viewModelScope.launch {
+            bookingDao.delete(booking)
+            println("❌ Booking deleted from database: ${booking.guestName} - Room ${booking.roomNumber}")
+        }
+    }
+
     // Optional: Add method to get room availability
     suspend fun isRoomAvailable(roomNumber: Int, checkIn: Date, checkOut: Date): Boolean {
         return bookingDao.getConflictingBookings(roomNumber, checkIn, checkOut).isEmpty()
