@@ -25,6 +25,12 @@ interface BookingDao {
     @Query("SELECT * FROM bookings WHERE id = :bookingId")
     suspend fun getBookingById(bookingId: String): Booking?
 
+    // In BookingDao.kt
+
+    @Query("SELECT * FROM bookings WHERE checkInDate < :checkOutDate AND checkOutDate > :checkInDate")
+    suspend fun getAllConflictingBookings(checkInDate: Date, checkOutDate: Date): List<Booking>
+
+
     @Query("""
         SELECT * FROM bookings 
         WHERE roomNumber = :roomNumber 
