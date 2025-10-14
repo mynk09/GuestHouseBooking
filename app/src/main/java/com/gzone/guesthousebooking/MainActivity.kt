@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -13,6 +14,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -78,20 +80,26 @@ private fun MainApp(bookingViewModel: BookingViewModel) {
     ) { innerPadding ->
         // This `when` block acts as a simple navigator.
         // It displays the correct screen based on the `currentScreen` state.
-        when (currentScreen) {
-            "form" -> {
-                // Show your original booking form screen
-                BookingFormScreen(
-                    bookingViewModel = bookingViewModel,
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
-            "calendar" -> {
-                // Show the new calendar view screen
-                BookingCalendarScreen(
-                    viewModel = bookingViewModel
-                    // The padding is applied automatically by the Scaffold's content lambda
-                )
+
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()) {
+            when (currentScreen) {
+                "form" -> {
+                    // Show your original booking form screen
+                    BookingFormScreen(
+                        bookingViewModel = bookingViewModel,
+                        modifier = Modifier.padding(innerPadding)
+                    )
+                }
+
+                "calendar" -> {
+                    // Show the new calendar view screen
+                    BookingCalendarScreen(
+                        viewModel = bookingViewModel
+                        // The padding is applied automatically by the Scaffold's content lambda
+                    )
+                }
             }
         }
     }

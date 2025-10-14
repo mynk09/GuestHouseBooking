@@ -2,8 +2,8 @@ package com.gzone.guesthousebooking.ui.booking
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DateRange
@@ -27,9 +27,6 @@ fun BookingFormScreen(
     bookingViewModel: BookingViewModel,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val dateFormatter = remember { SimpleDateFormat("dd-MMM-yy", Locale.US).apply { timeZone = TimeZone.getDefault() } }
-
     // Observe all state directly from the ViewModel
     val guestName by bookingViewModel.guestName.collectAsState()
     val numberOfGuests by bookingViewModel.numberOfGuests.collectAsState()
@@ -40,45 +37,117 @@ fun BookingFormScreen(
     val checkOutDate by bookingViewModel.checkOutDate.collectAsState()
     val allBookings = bookingViewModel.calendarUiState.collectAsState().value.bookings
 
+    // ✅ NEW LAYOUT: Use LazyColumn for the entire screen.
+    // This allows the form and the list to scroll together seamlessly.
+    LazyColumn(
+        modifier = modifier.fillMaxSize(), // Use the modifier passed from Scaffold
+        contentPadding = PaddingValues(horizontal = 16.dp)
+    ) {
+        // --- Header ---
+        item {
+            Text(
+                " TRACK GUEST HOUSE BOOKINGS",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // --- Form Section ---
+        item {
+            BookingFormFields(
+                bookingViewModel = bookingViewModel,
+                guestName = guestName,
+                numberOfGuests = numberOfGuests,
+                contactNumber = contactNumber,
+                selectedRoomNumbers = selectedRoomNumbers,
+                availableRooms = availableRooms,
+                checkInDate = checkInDate,
+                checkOutDate = checkOutDate
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // --- Submit Button ---
+        item {
+            Button(
+                onClick = { bookingViewModel.addBooking() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = guestName.isNotBlank() && selectedRoomNumbers.isNotEmpty() && checkInDate != null && checkOutDate != null
+            ) {
+                Text("Add ${if (selectedRoomNumbers.size > 1) "${selectedRoomNumbers.size} Bookings" else "Booking"}")
+            }
+        }
+
+        // --- Bookings List Section ---
+        item {
+            Text("Current Bookings:", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+
+        if (allBookings.isNotEmpty()) {
+            items(allBookings.sortedByDescending { it.checkInDate }, key = { it.id }) { booking ->
+                BookingListItem(
+                    booking = booking,
+                    onDelete = { bookingViewModel.deleteBooking(booking) }
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+        } else {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "No bookings yet.\nAdd your first booking above!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        // Add final spacer for bottom padding
+        item {
+            Spacer(modifier = Modifier.height(6.dp))
+        }
+    }
+}
+
+@Composable
+private fun BookingFormFields(
+    bookingViewModel: BookingViewModel,
+    guestName: String,
+    numberOfGuests: String,
+    contactNumber: String,
+    selectedRoomNumbers: List<Int>,
+    availableRooms: List<com.gzone.guesthousebooking.data.model.GuestRoom>,
+    checkInDate: Date?,
+    checkOutDate: Date?
+) {
+    val context = LocalContext.current
+    val dateFormatter = remember { SimpleDateFormat("dd-MMM-yy", Locale.US).apply { timeZone = TimeZone.getDefault() } }
     var expanded by remember { mutableStateOf(false) }
 
     fun showDatePicker(isCheckIn: Boolean) {
         val initialDate = if (isCheckIn) checkInDate else checkOutDate
-        val calendar = Calendar.getInstance().apply {
-            initialDate?.let { time = it }
-        }
-
-        DatePickerDialog(
-            context,
-            { _, year, month, dayOfMonth ->
-                calendar.set(year, month, dayOfMonth)
-                if (isCheckIn) {
-                    bookingViewModel.setCheckInDate(calendar.time)
-                } else {
-                    bookingViewModel.setCheckOutDate(calendar.time)
-                }
-            },
-            calendar.get(Calendar.YEAR),
-            calendar.get(Calendar.MONTH),
-            calendar.get(Calendar.DAY_OF_MONTH)
+        val calendar = Calendar.getInstance().apply { initialDate?.let { time = it } }
+        DatePickerDialog(context, { _, year, month, dayOfMonth ->
+            calendar.set(year, month, dayOfMonth)
+            if (isCheckIn) bookingViewModel.setCheckInDate(calendar.time) else bookingViewModel.setCheckOutDate(calendar.time)
+        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)
         ).apply {
-            if (!isCheckIn) {
-                checkInDate?.let { datePicker.minDate = it.time + (24 * 60 * 60 * 1000) }
-            }
+            if (!isCheckIn) checkInDate?.let { datePicker.minDate = it.time + (24 * 60 * 60 * 1000) }
         }.show()
     }
 
-
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("GUEST HOUSE BOOKINGS", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.fillMaxWidth())
-
-        // --- Dates Section ---
+        // Dates Section
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             DatePickerField(
                 label = "Check-in",
@@ -95,7 +164,7 @@ fun BookingFormScreen(
             )
         }
 
-        // --- Guest Name ---
+        // Guest Name
         OutlinedTextField(
             value = guestName,
             onValueChange = { bookingViewModel.onGuestNameChange(it) },
@@ -103,7 +172,7 @@ fun BookingFormScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
-        // --- Room Selection ---
+        // Room Selection
         Box(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = if (selectedRoomNumbers.isNotEmpty()) "Selected: ${selectedRoomNumbers.sorted().joinToString(", ")}" else "Select Available Rooms",
@@ -119,7 +188,6 @@ fun BookingFormScreen(
                     ) { Icon(Icons.Default.ArrowDropDown, "Select Rooms") }
                 }
             )
-
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.fillMaxWidth(0.9f)) {
                 if (availableRooms.isEmpty() && checkInDate != null && checkOutDate != null) {
                     DropdownMenuItem(
@@ -149,7 +217,7 @@ fun BookingFormScreen(
             }
         }
 
-        // --- Guest Details ---
+        // Guest Details
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = numberOfGuests,
@@ -164,39 +232,18 @@ fun BookingFormScreen(
                 modifier = Modifier.weight(1f)
             )
         }
-
-        // --- Submit Button ---
-        Button(
-            onClick = { bookingViewModel.addBooking() },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = guestName.isNotBlank() && selectedRoomNumbers.isNotEmpty() && checkInDate != null && checkOutDate != null
-        ) {
-            Text("Add ${if (selectedRoomNumbers.size > 1) "${selectedRoomNumbers.size} Bookings" else "Booking"}")
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // --- Bookings List ---
-        if (allBookings.isNotEmpty()) {
-            Text("Current Bookings:", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                allBookings.sortedByDescending { it.checkInDate }.forEach { booking ->
-                    BookingListItem(booking = booking, onDelete = { bookingViewModel.deleteBooking(booking) })
-                }
-            }
-        } else {
-            Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
-                Text("No bookings yet.\nAdd your first booking above!", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-            }
-        }
-        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
-// Helper for date fields (unchanged)
+
 @Composable
-fun RowScope.DatePickerField(label: String, date: Date?, dateFormatter: SimpleDateFormat, onIconClick: () -> Unit, enabled: Boolean = true) {
+fun RowScope.DatePickerField(
+    label: String,
+    date: Date?,
+    dateFormatter: SimpleDateFormat,
+    onIconClick: () -> Unit,
+    enabled: Boolean = true
+) {
     OutlinedTextField(
         value = date?.let { dateFormatter.format(it) } ?: "",
         onValueChange = {},
@@ -209,15 +256,12 @@ fun RowScope.DatePickerField(label: String, date: Date?, dateFormatter: SimpleDa
     )
 }
 
-// ✅ FIXED: The full, correct code for the BookingListItem is now included.
 @Composable
-fun BookingListItem(booking: com.gzone.guesthousebooking.data.model.Booking, onDelete: () -> Unit) {
-    val formatter = remember {
-        SimpleDateFormat("dd-MMM-yy", Locale.US).apply {
-            timeZone = TimeZone.getDefault()
-        }
-    }
-
+fun BookingListItem(
+    booking: com.gzone.guesthousebooking.data.model.Booking,
+    onDelete: () -> Unit
+) {
+    val formatter = remember { SimpleDateFormat("dd-MMM-yy", Locale.US).apply { timeZone = TimeZone.getDefault() } }
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -229,22 +273,17 @@ fun BookingListItem(booking: com.gzone.guesthousebooking.data.model.Booking, onD
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Room ${booking.roomNumber} - ${booking.guestName}",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    "Room ${booking.roomNumber} - ${booking.guestName}",
+                    style = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.primary)
                 )
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, "Delete Booking", tint = MaterialTheme.colorScheme.error)
                 }
             }
             Divider(modifier = Modifier.padding(vertical = 4.dp))
+            Text("Guests: ${booking.numberOfGuests} • Contact: ${booking.contactNumber}", style = MaterialTheme.typography.bodyMedium)
             Text(
-                "Guests: ${booking.numberOfGuests} • Contact: ${booking.contactNumber}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                text = "Dates: ${formatter.format(booking.checkInDate)} to ${formatter.format(booking.checkOutDate)}",
+                "Dates: ${formatter.format(booking.checkInDate)} to ${formatter.format(booking.checkOutDate)}",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
