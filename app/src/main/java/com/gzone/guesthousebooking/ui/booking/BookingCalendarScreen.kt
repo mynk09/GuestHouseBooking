@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -48,7 +49,7 @@ fun BookingCalendarScreen(viewModel: BookingViewModel) {
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
         // --- 1. Header Row (Dates) ---
         Row(modifier = Modifier.fillMaxWidth()) {
             Spacer(modifier = Modifier.width(roomCellWidth)) // Top-left empty cell
@@ -154,8 +155,8 @@ private fun BookingItem(booking: Booking, timelineStartDate: LocalDate, dateRang
                 .width(bookingWidth)
                 .fillMaxHeight()
                 .padding(2.dp)
-                .background(Color(0xFF3F51B5), shape = RoundedCornerShape(4.dp))
-                .border(1.dp, Color(0xFF303F9F), shape = RoundedCornerShape(4.dp)),
+                .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(4.dp))
+                .border(1.dp,MaterialTheme.colorScheme.secondary, shape = RoundedCornerShape(4.dp)),
             contentAlignment = Alignment.Center
         ) {
             Text(
