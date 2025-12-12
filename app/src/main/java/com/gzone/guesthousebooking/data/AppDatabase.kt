@@ -10,7 +10,7 @@ import com.gzone.guesthousebooking.data.model.GuestRoom
 
 @Database(
     entities = [Booking::class, GuestRoom::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

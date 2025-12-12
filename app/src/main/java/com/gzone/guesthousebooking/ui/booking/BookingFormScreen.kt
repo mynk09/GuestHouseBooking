@@ -309,6 +309,8 @@ fun BookingListItem(
                 }
             }
             Divider(modifier = Modifier.padding(vertical = 4.dp))
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("ID: ${booking.id}")
             Text("Guests: ${booking.numberOfGuests} • Contact: ${booking.contactNumber}", style = MaterialTheme.typography.bodyMedium)
             Text(
                 "Dates: ${formatter.format(booking.checkInDate)} to ${formatter.format(booking.checkOutDate)}",
