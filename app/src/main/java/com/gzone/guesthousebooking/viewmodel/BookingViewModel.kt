@@ -206,6 +206,9 @@ class BookingViewModel(application: Application) : AndroidViewModel(application)
         _numberOfGuests.value = ""
         _contactNumber.value = ""
         _selectedRoomNumbers.value = emptyList()
+        _checkInDate.value = null
+        _checkOutDate.value = null
+        _availableRooms.value = emptyList()
     }
 
     private suspend fun isRoomAvailable(roomNumber: Int, checkIn: Date, checkOut: Date): Boolean {
