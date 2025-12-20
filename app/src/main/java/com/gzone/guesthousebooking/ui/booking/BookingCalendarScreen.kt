@@ -8,7 +8,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,8 +31,12 @@ import com.gzone.guesthousebooking.data.model.Booking
 import com.gzone.guesthousebooking.viewmodel.BookingViewModel
 import com.gzone.guesthousebooking.viewmodel.toLocalDate
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.util.Locale
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 
 // --- UI Constants ---
 private val dayCellWidth: Dp = 65.dp
@@ -40,6 +48,8 @@ private val gridBorderColor: Color = Color.LightGray
 fun BookingCalendarScreen(viewModel: BookingViewModel) {
     // Observe the correct state from the ViewModel
     val uiState by viewModel.calendarUiState.collectAsState()
+    val visibleMonth by viewModel.visibleMonth.collectAsState()
+
     val horizontalScrollState = rememberScrollState()
 
     if (uiState.isLoading) {
@@ -49,7 +59,19 @@ fun BookingCalendarScreen(viewModel: BookingViewModel) {
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .windowInsetsPadding(WindowInsets.systemBars)) {
+
+        CalendarControlHeader(
+            visibleMonth = visibleMonth,
+            onPreviousMonth = { viewModel.navigateToPreviousMonth() },
+            onNextMonth = { viewModel.navigateToNextMonth() },
+            onToday = { viewModel.returnToCurrentMonth() },
+            canNavigateBackward = uiState.canNavigateBackward,
+            canNavigateForward = uiState.canNavigateForward
+        )
+
         // --- 1. Header Row (Dates) ---
         Row(modifier = Modifier.fillMaxWidth()) {
             Spacer(modifier = Modifier.width(roomCellWidth)) // Top-left empty cell
@@ -78,7 +100,7 @@ fun BookingCalendarScreen(viewModel: BookingViewModel) {
                     ) {
                         // Background cells
                         Row {
-                            (0 until uiState.dateRange).forEach { DayBackgroundCell() }
+                            (0 until uiState.dateRange).forEach { _ -> DayBackgroundCell() }
                         }
 
                         // Overlay bookings
@@ -86,8 +108,7 @@ fun BookingCalendarScreen(viewModel: BookingViewModel) {
                         bookingsForRoom.forEach { booking ->
                             BookingItem(
                                 booking = booking,
-                                timelineStartDate = uiState.timelineStart,
-                                dateRange = uiState.dateRange
+                                visibleMonth = visibleMonth
                             )
                         }
                     }
@@ -97,7 +118,46 @@ fun BookingCalendarScreen(viewModel: BookingViewModel) {
     }
 }
 
-// region Sub-Composables
+@Composable
+private fun CalendarControlHeader(
+    visibleMonth: YearMonth,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    onToday: () -> Unit,
+    canNavigateBackward: Boolean,
+    canNavigateForward: Boolean
+){
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        IconButton(onClick = onPreviousMonth, enabled = canNavigateBackward) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Previous Month")
+        }
+
+        Text(
+            text = visibleMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy",
+                Locale.getDefault())),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+
+        Row {
+            // "Today" button is useful for quickly returning to the current month
+            Button(onClick = onToday, modifier = Modifier.padding(end = 8.dp)) {
+                Text("Today")
+            }
+            IconButton(onClick = onNextMonth, enabled = canNavigateForward) {
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next Month")
+            }
+        }
+    }
+}
+
+// region Sub-Composable
 @Composable
 private fun DateHeaderCell(date: LocalDate) {
     Column(
@@ -138,14 +198,21 @@ private fun DayBackgroundCell() {
 }
 
 @Composable
-private fun BookingItem(booking: Booking, timelineStartDate: LocalDate, dateRange: Int) {
-    val checkIn = booking.checkInDate.toLocalDate()
-    val checkOut = booking.checkOutDate.toLocalDate()
+private fun BookingItem(booking: Booking, visibleMonth: YearMonth) {
+    val bookingStart = booking.checkInDate.toLocalDate()
+    val bookingEnd = booking.checkOutDate.toLocalDate()
+    val monthStart = visibleMonth.atDay(1)
+    val monthEnd = visibleMonth.atEndOfMonth()
 
-    val durationInDays = ChronoUnit.DAYS.between(checkIn, checkOut).coerceAtLeast(0)
-    val offsetInDays = ChronoUnit.DAYS.between(timelineStartDate, checkIn)
+    val effectiveStart =  if (bookingStart.isBefore(monthStart)) monthStart else bookingStart
+    // Effective end is the earlier of booking end or month end
+    val effectiveEnd = if (bookingEnd.isAfter(monthEnd)) monthEnd.plusDays(1) else bookingEnd
 
-    if (durationInDays > 0 && offsetInDays < dateRange && offsetInDays + durationInDays >= 0) {
+    val durationInDays = ChronoUnit.DAYS.between(effectiveStart, effectiveEnd).coerceAtLeast(0)
+    // Offset is from the start of the visible month
+    val offsetInDays = ChronoUnit.DAYS.between(monthStart, effectiveStart).coerceAtLeast(0)
+
+    if (durationInDays > 0) {
         val bookingWidth = (durationInDays * dayCellWidth.value).dp
         val bookingOffset = (offsetInDays * dayCellWidth.value).dp
 
@@ -156,7 +223,7 @@ private fun BookingItem(booking: Booking, timelineStartDate: LocalDate, dateRang
                 .fillMaxHeight()
                 .padding(2.dp)
                 .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(4.dp))
-                .border(1.dp,MaterialTheme.colorScheme.secondary, shape = RoundedCornerShape(4.dp)),
+                .border(1.dp, MaterialTheme.colorScheme.secondary, shape = RoundedCornerShape(4.dp)),
             contentAlignment = Alignment.Center
         ) {
             Text(
