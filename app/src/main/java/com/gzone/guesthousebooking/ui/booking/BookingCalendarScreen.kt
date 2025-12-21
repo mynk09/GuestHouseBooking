@@ -45,7 +45,7 @@ private val cellHeight: Dp = 60.dp
 private val gridBorderColor: Color = Color.LightGray
 
 @Composable
-fun BookingCalendarScreen(viewModel: BookingViewModel) {
+fun BookingCalendarScreen(viewModel: BookingViewModel, modifier: Modifier = Modifier) {
     // Observe the correct state from the ViewModel
     val uiState by viewModel.calendarUiState.collectAsState()
     val visibleMonth by viewModel.visibleMonth.collectAsState()
@@ -59,9 +59,8 @@ fun BookingCalendarScreen(viewModel: BookingViewModel) {
         return
     }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .windowInsetsPadding(WindowInsets.systemBars)) {
+    Column(modifier = modifier
+        .fillMaxSize()) {
 
         CalendarControlHeader(
             visibleMonth = visibleMonth,
