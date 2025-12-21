@@ -96,8 +96,8 @@ private fun MainApp(bookingViewModel: BookingViewModel) {
                 "calendar" -> {
                     // Show the new calendar view screen
                     BookingCalendarScreen(
-                        viewModel = bookingViewModel
-                        // The padding is applied automatically by the Scaffold's content lambda
+                        viewModel = bookingViewModel,
+                        modifier = Modifier.padding(innerPadding)
                     )
                 }
             }

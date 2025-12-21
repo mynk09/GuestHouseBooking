@@ -3,12 +3,24 @@ package com.gzone.guesthousebooking.ui.booking
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -35,34 +47,40 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 
 // --- UI Constants ---
 private val dayCellWidth: Dp = 65.dp
 private val roomCellWidth: Dp = 120.dp
 private val cellHeight: Dp = 60.dp
+private val bookingBarVerticalPadding: Dp = 2.dp
 private val gridBorderColor: Color = Color.LightGray
+private val headerCellBackground: Color
+    @Composable get() = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
 
 @Composable
-fun BookingCalendarScreen(viewModel: BookingViewModel) {
-    // Observe the correct state from the ViewModel
+fun BookingCalendarScreen(
+    viewModel: BookingViewModel,
+    modifier: Modifier = Modifier
+) {
     val uiState by viewModel.calendarUiState.collectAsState()
     val visibleMonth by viewModel.visibleMonth.collectAsState()
 
     val horizontalScrollState = rememberScrollState()
 
     if (uiState.isLoading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
             CircularProgressIndicator()
         }
         return
     }
 
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .windowInsetsPadding(WindowInsets.systemBars)) {
-
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+    ) {
         CalendarControlHeader(
             visibleMonth = visibleMonth,
             onPreviousMonth = { viewModel.navigateToPreviousMonth() },
@@ -72,9 +90,9 @@ fun BookingCalendarScreen(viewModel: BookingViewModel) {
             canNavigateForward = uiState.canNavigateForward
         )
 
-        // --- 1. Header Row (Dates) ---
+        // Header row (top-left cell + dates)
         Row(modifier = Modifier.fillMaxWidth()) {
-            Spacer(modifier = Modifier.width(roomCellWidth)) // Top-left empty cell
+            TopLeftLegendCell()
             Row(modifier = Modifier.horizontalScroll(horizontalScrollState)) {
                 (0 until uiState.dateRange).forEach { dayIndex ->
                     val date = uiState.timelineStart.plusDays(dayIndex.toLong())
@@ -83,7 +101,7 @@ fun BookingCalendarScreen(viewModel: BookingViewModel) {
             }
         }
 
-        // --- 2. Main Content (Rooms and Bookings Grid) ---
+        // Main content: rooms + booking grid
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             items(uiState.rooms, key = { room -> room.number }) { room ->
                 Row(
@@ -92,7 +110,6 @@ fun BookingCalendarScreen(viewModel: BookingViewModel) {
                 ) {
                     RoomNameCell("Room ${room.number}")
 
-                    // Booking Grid Row (Scrollable)
                     Box(
                         modifier = Modifier
                             .height(cellHeight)
@@ -100,11 +117,14 @@ fun BookingCalendarScreen(viewModel: BookingViewModel) {
                     ) {
                         // Background cells
                         Row {
-                            (0 until uiState.dateRange).forEach { _ -> DayBackgroundCell() }
+                            (0 until uiState.dateRange).forEach { _ ->
+                                DayBackgroundCell()
+                            }
                         }
 
-                        // Overlay bookings
-                        val bookingsForRoom = uiState.bookings.filter { it.roomNumber == room.number }
+                        // Booking bars
+                        val bookingsForRoom =
+                            uiState.bookings.filter { it.roomNumber == room.number }
                         bookingsForRoom.forEach { booking ->
                             BookingItem(
                                 booking = booking,
@@ -126,28 +146,35 @@ private fun CalendarControlHeader(
     onToday: () -> Unit,
     canNavigateBackward: Boolean,
     canNavigateForward: Boolean
-){
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
     ) {
         IconButton(onClick = onPreviousMonth, enabled = canNavigateBackward) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Previous Month")
         }
 
         Text(
-            text = visibleMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy",
-                Locale.getDefault())),
+            text = visibleMonth.format(
+                DateTimeFormatter.ofPattern(
+                    "MMMM yyyy",
+                    Locale.getDefault()
+                )
+            ),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
 
-        Row {
-            // "Today" button is useful for quickly returning to the current month
-            Button(onClick = onToday, modifier = Modifier.padding(end = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Button(
+                onClick = onToday,
+                modifier = Modifier.padding(end = 8.dp),
+                shape = CircleShape
+            ) {
                 Text("Today")
             }
             IconButton(onClick = onNextMonth, enabled = canNavigateForward) {
@@ -158,18 +185,45 @@ private fun CalendarControlHeader(
 }
 
 // region Sub-Composable
+
+@Composable
+private fun TopLeftLegendCell() {
+    Box(
+        modifier = Modifier
+            .width(roomCellWidth)
+            .height(cellHeight)
+            .border(0.5.dp, gridBorderColor)
+            .background(headerCellBackground),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.List,
+            contentDescription = "Bookings legend",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 @Composable
 private fun DateHeaderCell(date: LocalDate) {
     Column(
         modifier = Modifier
             .width(dayCellWidth)
             .height(cellHeight)
-            .border(0.5.dp, gridBorderColor),
+            .border(0.5.dp, gridBorderColor)
+            .background(headerCellBackground),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center
     ) {
-        Text(text = date.format(DateTimeFormatter.ofPattern("E")), fontSize = 12.sp)
-        Text(text = date.dayOfMonth.toString(), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Text(
+            text = date.format(DateTimeFormatter.ofPattern("E")),
+            fontSize = 12.sp
+        )
+        Text(
+            text = date.dayOfMonth.toString(),
+            fontWeight = FontWeight.Bold,
+            fontSize = 16.sp
+        )
     }
 }
 
@@ -180,10 +234,15 @@ private fun RoomNameCell(name: String) {
             .width(roomCellWidth)
             .height(cellHeight)
             .border(0.5.dp, gridBorderColor)
-            .padding(8.dp),
+            .padding(horizontal = 8.dp),
         contentAlignment = Alignment.CenterStart
     ) {
-        Text(text = name, fontWeight = FontWeight.Bold)
+        Text(
+            text = name,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -204,26 +263,39 @@ private fun BookingItem(booking: Booking, visibleMonth: YearMonth) {
     val monthStart = visibleMonth.atDay(1)
     val monthEnd = visibleMonth.atEndOfMonth()
 
-    val effectiveStart =  if (bookingStart.isBefore(monthStart)) monthStart else bookingStart
-    // Effective end is the earlier of booking end or month end
+    val effectiveStart = if (bookingStart.isBefore(monthStart)) monthStart else bookingStart
     val effectiveEnd = if (bookingEnd.isAfter(monthEnd)) monthEnd.plusDays(1) else bookingEnd
 
-    val durationInDays = ChronoUnit.DAYS.between(effectiveStart, effectiveEnd).coerceAtLeast(0)
-    // Offset is from the start of the visible month
-    val offsetInDays = ChronoUnit.DAYS.between(monthStart, effectiveStart).coerceAtLeast(0)
+    val durationInDays =
+        ChronoUnit.DAYS.between(effectiveStart, effectiveEnd).coerceAtLeast(0)
+    val offsetInDays =
+        ChronoUnit.DAYS.between(monthStart, effectiveStart).coerceAtLeast(0)
 
     if (durationInDays > 0) {
         val bookingWidth = (durationInDays * dayCellWidth.value).dp
         val bookingOffset = (offsetInDays * dayCellWidth.value).dp
 
+        // Booking bar height slightly less than cellHeight and centered
+        val barHeight = cellHeight - bookingBarVerticalPadding * 2
+
         Box(
             modifier = Modifier
-                .offset(x = bookingOffset)
+                .padding(
+                    start = bookingOffset,
+                    top = bookingBarVerticalPadding,
+                    bottom = bookingBarVerticalPadding
+                )
                 .width(bookingWidth)
-                .fillMaxHeight()
-                .padding(2.dp)
-                .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(4.dp))
-                .border(1.dp, MaterialTheme.colorScheme.secondary, shape = RoundedCornerShape(4.dp)),
+                .height(barHeight)
+                .background(
+                    MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(4.dp)
+                )
+                .border(
+                    1.dp,
+                    MaterialTheme.colorScheme.secondary,
+                    shape = RoundedCornerShape(4.dp)
+                ),
             contentAlignment = Alignment.Center
         ) {
             Text(
