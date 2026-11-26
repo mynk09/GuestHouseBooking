@@ -28,6 +28,7 @@ import com.gzone.guesthousebooking.ui.booking.BookingCalendarScreen
 import com.gzone.guesthousebooking.ui.booking.BookingFormScreen // <-- Make sure to import your renamed form screen
 import com.gzone.guesthousebooking.ui.theme.GuestHouseBookingTheme
 import com.gzone.guesthousebooking.viewmodel.BookingViewModel
+import com.gzone.guesthousebooking.viewmodel.BookingViewModelFactory
 
 // Data class to represent each item in our navigation bar
 private data class NavItem(val label: String, val icon: ImageVector, val screenRoute: String)
@@ -35,7 +36,9 @@ private data class NavItem(val label: String, val icon: ImageVector, val screenR
 class MainActivity : ComponentActivity() {
     // Initialize the BookingViewModel once for the entire activity lifecycle.
     // Both screens will share this same instance.
-    private val bookingViewModel: BookingViewModel by viewModels()
+    private val bookingViewModel: BookingViewModel by viewModels {
+        BookingViewModelFactory(applicationContext)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

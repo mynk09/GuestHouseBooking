@@ -80,6 +80,8 @@ fun BookingFormScreen(
     val checkInDate by bookingViewModel.checkInDate.collectAsState()
     val checkOutDate by bookingViewModel.checkOutDate.collectAsState()
     val allBookings = bookingViewModel.calendarUiState.collectAsState().value.bookings
+    val isSaving by bookingViewModel.isSaving.collectAsState()
+    val bookingError by bookingViewModel.bookingError.collectAsState()
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -128,18 +130,29 @@ fun BookingFormScreen(
             Button(
                 onClick = { bookingViewModel.addBooking() },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = guestName.isNotBlank() &&
+                enabled = !isSaving && guestName.isNotBlank() &&
                         selectedRoomNumbers.isNotEmpty() &&
                         checkInDate != null &&
-                        checkOutDate != null
+                        checkOutDate != null &&
+                        checkOutDate!!.after(checkInDate)
             ) {
                 Text(
-                    "Add ${
+                    if (isSaving) "Saving…" else "Add ${
                         if (selectedRoomNumbers.size > 1)
                             "${selectedRoomNumbers.size} Bookings"
                         else
                             "Booking"
                     }"
+                )
+            }
+        }
+
+        if (bookingError != null) {
+            item {
+                Text(
+                    text = bookingError.orEmpty(),
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
         }

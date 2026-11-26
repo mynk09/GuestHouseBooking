@@ -1,15 +1,14 @@
 package com.gzone.guesthousebooking.viewmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.gzone.guesthousebooking.data.AppDatabase
+import com.gzone.guesthousebooking.data.repository.BookingFailure
+import com.gzone.guesthousebooking.data.repository.BookingRepository
+import com.gzone.guesthousebooking.data.repository.BookingWriteResult
 import com.gzone.guesthousebooking.data.model.Booking
 import com.gzone.guesthousebooking.data.model.GuestRoom
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
@@ -29,11 +28,7 @@ data class BookingCalendarUiState(
     val canNavigateForward: Boolean = true
 )
 
-class BookingViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val database = AppDatabase.getDatabase(application)
-    private val bookingDao = database.bookingDao()
-    private val roomDao = database.roomDao()
+class BookingViewModel(private val repository: BookingRepository) : ViewModel() {
 
     private val _visibleMonth = MutableStateFlow(YearMonth.now())
     val visibleMonth: StateFlow<YearMonth> = _visibleMonth.asStateFlow()
@@ -42,8 +37,8 @@ class BookingViewModel(application: Application) : AndroidViewModel(application)
     private val maxMonth = YearMonth.now().plusMonths(9)
 
     val calendarUiState: StateFlow<BookingCalendarUiState> = combine(
-        roomDao.getAllRooms(),
-        bookingDao.getAllBookings(),
+        repository.observeRooms(),
+        repository.observeBookings(),
         _visibleMonth
     ) { rooms, bookings, month ->
         BookingCalendarUiState(
@@ -68,9 +63,26 @@ class BookingViewModel(application: Application) : AndroidViewModel(application)
     private val _checkOutDate = MutableStateFlow<Date?>(null)
     val checkOutDate: StateFlow<Date?> = _checkOutDate.asStateFlow()
 
-    // --- BACK TO BASICS: A simple state flow for the available rooms list ---
-    private val _availableRooms = MutableStateFlow<List<GuestRoom>>(emptyList())
-    val availableRooms: StateFlow<List<GuestRoom>> = _availableRooms.asStateFlow()
+    // Re-evaluate when either dates or stored data change; this is advisory only.
+    val availableRooms: StateFlow<List<GuestRoom>> = combine(
+        _checkInDate, _checkOutDate, repository.observeRooms(), repository.observeBookings()
+    ) { checkIn, checkOut, rooms, bookings ->
+        if (checkIn == null || checkOut == null || !checkOut.after(checkIn)) {
+            emptyList()
+        } else {
+            val occupied = bookings.filter {
+                it.paymentStatus != com.gzone.guesthousebooking.data.model.PaymentStatus.CANCELLED &&
+                    it.checkInDate.before(checkOut) && it.checkOutDate.after(checkIn)
+            }.map { it.roomNumber }.toSet()
+            rooms.filter { it.isActive && it.number !in occupied }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _isSaving = MutableStateFlow(false)
+    val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
+
+    private val _bookingError = MutableStateFlow<String?>(null)
+    val bookingError: StateFlow<String?> = _bookingError.asStateFlow()
 
     private val _guestName = MutableStateFlow("")
     val guestName: StateFlow<String> = _guestName.asStateFlow()
@@ -81,55 +93,21 @@ class BookingViewModel(application: Application) : AndroidViewModel(application)
     private val _selectedRoomNumbers = MutableStateFlow<List<Int>>(emptyList())
     val selectedRoomNumbers: StateFlow<List<Int>> = _selectedRoomNumbers.asStateFlow()
 
-    // --- THIS IS THE CRITICAL CHANGE ---
-// In BookingViewModel.kt
-
-    private fun updateAvailableRooms(checkIn: Date?, checkOut: Date?) {
-        // If dates are not set, do nothing.
-        if (checkIn == null || checkOut == null) {
-            _availableRooms.value = emptyList()
-            return
-        }
-
-        // Launch a coroutine to do the work in the background.
-        viewModelScope.launch {
-            // --- THIS IS THE ONE-LINE FIX ---
-            // Get the room list from the already-loaded calendar state.
-            // This avoids any new database calls or blocking operations.
-            val allRooms = calendarUiState.value.rooms
-
-            // Get conflicting bookings from the database ON A BACKGROUND THREAD.
-            val conflictingBookings = withContext(Dispatchers.IO) {
-                bookingDao.getAllConflictingBookings(checkIn, checkOut)
-            }
-
-            val conflictingRoomNumbers = conflictingBookings.map { it.roomNumber }.toSet()
-
-            // Update the state with the final list. This is safe to do.
-            _availableRooms.value = allRooms.filter { room -> !conflictingRoomNumbers.contains(room.number) }
-        }
-    }
-
-
-    // --- `setCheckInDate` and `setCheckOutDate` now call the manual update function ---
     fun setCheckInDate(date: Date?) {
         _checkInDate.value = date
-        if (_checkOutDate.value?.before(date) == true) {
+        if (date == null || _checkOutDate.value?.after(date) == false) {
             _checkOutDate.value = null
         }
         _selectedRoomNumbers.value = emptyList()
-        // Manually trigger the update.
-        updateAvailableRooms(date, _checkOutDate.value)
+        _bookingError.value = null
     }
 
     fun setCheckOutDate(date: Date?) {
         _checkOutDate.value = date
         _selectedRoomNumbers.value = emptyList()
-        // Manually trigger the update.
-        updateAvailableRooms(_checkInDate.value, date)
+        _bookingError.value = null
     }
 
-    // --- Rest of the file is unchanged and known to be correct ---
     fun navigateToPreviousMonth() {
         val currentMonth = _visibleMonth.value
         if (currentMonth.isAfter(minMonth)) {
@@ -170,34 +148,41 @@ class BookingViewModel(application: Application) : AndroidViewModel(application)
         val contact = _contactNumber.value
         val rooms = _selectedRoomNumbers.value
 
-        if (checkIn == null || checkOut == null || name.isBlank() || rooms.isEmpty()) return
+        if (_isSaving.value) return
+        if (checkIn == null || checkOut == null || !checkOut.after(checkIn) ||
+            name.isBlank() || rooms.isEmpty() || (guests.toIntOrNull() ?: 1) <= 0
+        ) {
+            _bookingError.value = "Enter valid booking details and a check-out after check-in."
+            return
+        }
 
+        val bookings = rooms.map { roomNumber ->
+            Booking(
+                guestName = name,
+                roomNumber = roomNumber,
+                checkInDate = checkIn,
+                checkOutDate = checkOut,
+                numberOfGuests = guests.toIntOrNull() ?: 1,
+                contactNumber = contact
+            )
+        }
+        _isSaving.value = true
+        _bookingError.value = null
         viewModelScope.launch {
-            rooms.forEach { roomNumber ->
-                val isAvailable = withContext(Dispatchers.IO) {
-                    isRoomAvailable(roomNumber, checkIn, checkOut)
+            try {
+                when (val result = repository.createBookings(bookings)) {
+                    BookingWriteResult.Success -> clearFormState()
+                    else -> _bookingError.value = result.errorMessage()
                 }
-                if (isAvailable) {
-                    val newBooking = Booking(
-                        guestName = name,
-                        roomNumber = roomNumber,
-                        checkInDate = checkIn,
-                        checkOutDate = checkOut,
-                        numberOfGuests = guests.toIntOrNull() ?: 1,
-                        contactNumber = contact
-                    )
-                    bookingDao.insert(newBooking)
-                } else {
-                    println("SKIPPED booking for Room $roomNumber as it was already booked.")
-                }
+            } finally {
+                _isSaving.value = false
             }
-            clearFormState()
         }
     }
 
     fun deleteBooking(booking: Booking) {
         viewModelScope.launch {
-            bookingDao.delete(booking)
+            _bookingError.value = repository.deleteBooking(booking.id).errorMessage()
         }
     }
 
@@ -208,10 +193,18 @@ class BookingViewModel(application: Application) : AndroidViewModel(application)
         _selectedRoomNumbers.value = emptyList()
         _checkInDate.value = null
         _checkOutDate.value = null
-        _availableRooms.value = emptyList()
+        _bookingError.value = null
     }
 
-    private suspend fun isRoomAvailable(roomNumber: Int, checkIn: Date, checkOut: Date): Boolean {
-        return bookingDao.getConflictingBookings(roomNumber, checkIn, checkOut).isEmpty()
+    private fun BookingWriteResult.errorMessage(): String? = when (this) {
+        BookingWriteResult.Success -> null
+        is BookingWriteResult.Unavailable ->
+            "Booking failed: rooms ${roomNumbers.sorted().joinToString()} are unavailable. No bookings were saved."
+        is BookingWriteResult.Failed -> when (reason) {
+            BookingFailure.INVALID_REQUEST -> "Check the booking details and selected rooms."
+            BookingFailure.ACCESS_DENIED -> "You do not have permission to make this change."
+            BookingFailure.CONNECTION_REQUIRED -> "Connect to the internet to confirm this change."
+            BookingFailure.STORAGE_ERROR -> "Could not save the change. Please try again."
+        }
     }
 }

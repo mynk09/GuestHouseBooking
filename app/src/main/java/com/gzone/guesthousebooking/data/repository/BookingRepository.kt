@@ -1,41 +1,36 @@
 package com.gzone.guesthousebooking.data.repository
 
 import com.gzone.guesthousebooking.data.model.Booking
-import java.util.Date
-import java.util.UUID
+import com.gzone.guesthousebooking.data.model.GuestRoom
+import kotlinx.coroutines.flow.Flow
 
-class BookingRepository {
+/**
+ * Storage strategy consumed by the booking UI.
+ *
+ * Implementations own threading, persistence and final availability validation.
+ * Availability is advisory; only a successful createBookings result confirms a reservation.
+ * A remote implementation must enforce permissions and conflicts on the server.
+ */
+interface BookingRepository {
+    fun observeBookings(): Flow<List<Booking>>
+    fun observeRooms(): Flow<List<GuestRoom>>
 
-    private val bookings = mutableListOf<Booking>()
+    /** Confirms every room in the request atomically, or confirms none of them. */
+    suspend fun createBookings(bookings: List<Booking>): BookingWriteResult
 
-    fun getAllBookings(): List<Booking> = bookings
+    suspend fun deleteBooking(bookingId: String): BookingWriteResult
+}
 
-    fun addBooking(booking: Booking) {
-        bookings.add(booking)
-    }
+sealed interface BookingWriteResult {
+    object Success : BookingWriteResult
+    data class Unavailable(val roomNumbers: Set<Int>) : BookingWriteResult
+    data class Failed(val reason: BookingFailure) : BookingWriteResult
+}
 
-    fun removeBooking(bookingId: String) {
-        bookings.removeAll { it.id == bookingId }
-    }
-
-    fun createBooking(
-        guestName: String,
-        roomNumber: Int,
-        checkInDate: Date,
-        checkOutDate: Date,
-        numberOfGuests: Int,
-        contactNumber: String
-    ): Booking {
-        val booking = Booking(
-            id = UUID.randomUUID().toString(),
-            guestName = guestName,
-            roomNumber = roomNumber,
-            checkInDate = checkInDate,
-            checkOutDate = checkOutDate,
-            numberOfGuests = numberOfGuests,
-            contactNumber = contactNumber
-        )
-        addBooking(booking)
-        return booking
-    }
+/** Provider-independent failures; never expose SQL, sheet rows or HTTP details to the UI. */
+enum class BookingFailure {
+    INVALID_REQUEST,
+    ACCESS_DENIED,
+    CONNECTION_REQUIRED,
+    STORAGE_ERROR
 }

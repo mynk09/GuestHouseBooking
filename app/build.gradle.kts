@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)  // ✅ KSP for Room
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -52,6 +53,10 @@ android {
 }
 
 dependencies {
+    implementation(platform("com.google.firebase:firebase-bom:33.16.0"))
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+
     // Room Database with KSP
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

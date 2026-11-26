@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "445977224293",
+    "project_id": "guesthouse-booking-mynks-5d54f",
+    "storage_bucket": "guesthouse-booking-mynks-5d54f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:445977224293:android:340f5cb736404af8e7d28c",
+        "android_client_info": {
+          "package_name": "com.gzone.guesthousebooking"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKhFSJ4fzhSZd5QhDv7uMdI63tnK8_Xnw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
