@@ -1,0 +1,141 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function memberRole(property) {
+      return get(/databases/$(db)/documents/properties/$(property)/members/$(request.auth.uid)).data.role;
+    }
+
+    function hasRole(property, roles) {
+      return request.auth != null && memberRole(property) in roles;
+    }
+
+    function canRead(property) {
+      return hasRole(property, ['Owner', 'Manager', 'Viewer']);
+    }
+
+    function canBook(property) {
+      return hasRole(property, ['Owner', 'Manager']);
+    }
+
+    function bookingPath(property, id) {
+      return /databases/$(db)/documents/properties/$(property)/bookings/$(id);
+    }
+
+    function slotKey(room, day) {
+      return string(room) + '_' + string(day);
+    }
+
+    function slotPath(property, room, day) {
+      return /databases/$(db)/documents/properties/$(property)/occupancy/$(slotKey(room, day));
+    }
+
+    function validBookingId(id) {
+      return id is string && id.matches('^[A-Za-z0-9_-]{16,64}$');
+    }
+
+    function nights(data) {
+      return data.endDay - data.startDay;
+    }
+
+    function roomExists(property, room) {
+      return room is int && room > 0 && room <= 9999 &&
+        get(/databases/$(db)/documents/properties/$(property)/rooms/$(string(room))).data.active == true;
+    }
+
+    function validRooms(property, rooms) {
+      return roomExists(property, rooms[0]) &&
+        (rooms.size() < 2 || roomExists(property, rooms[1])) &&
+        (rooms.size() < 3 || roomExists(property, rooms[2]));
+    }
+
+    function validNewBooking(property, id, data) {
+      return validBookingId(id) &&
+        data.keys().hasOnly(['rooms', 'startDay', 'endDay', 'guestName', 'status', 'createdBy', 'createdAt']) &&
+        data.rooms is list && data.rooms.size() >= 1 && data.rooms.size() <= 3 &&
+        data.rooms.toSet().size() == data.rooms.size() &&
+        data.startDay is int && data.startDay >= 0 && data.endDay is int && data.endDay <= 100000 &&
+        nights(data) > 0 && data.rooms.size() * nights(data) <= 5 &&
+        data.guestName is string && data.guestName.size() <= 200 && data.guestName.matches('.*[^[:space:]].*') &&
+        data.status == 'active' && data.createdBy == request.auth.uid && data.createdAt == request.time &&
+        validRooms(property, data.rooms);
+    }
+
+    function slotMatches(property, id, room, day, releasing) {
+      let path = slotPath(property, room, day);
+      return releasing ? !existsAfter(path) : getAfter(path).data.bookingId == id;
+    }
+
+    // The room-night cap makes it possible to check every slot within the rules limits.
+    function roomSlotsMatch(property, id, data, room, releasing) {
+      let day = data.startDay;
+      let count = nights(data);
+      return slotMatches(property, id, room, day, releasing) &&
+        (count < 2 || slotMatches(property, id, room, day + 1, releasing)) &&
+        (count < 3 || slotMatches(property, id, room, day + 2, releasing)) &&
+        (count < 4 || slotMatches(property, id, room, day + 3, releasing)) &&
+        (count < 5 || slotMatches(property, id, room, day + 4, releasing));
+    }
+
+    function allSlotsMatch(property, id, data, releasing) {
+      return roomSlotsMatch(property, id, data, data.rooms[0], releasing) &&
+        (data.rooms.size() < 2 || roomSlotsMatch(property, id, data, data.rooms[1], releasing)) &&
+        (data.rooms.size() < 3 || roomSlotsMatch(property, id, data, data.rooms[2], releasing));
+    }
+
+    function validSlot(key, slot, booking) {
+      return slot.keys().hasOnly(['bookingId', 'room', 'day']) &&
+        slot.room is int && slot.day is int && key == slotKey(slot.room, slot.day) &&
+        slot.room in booking.rooms && slot.day >= booking.startDay && slot.day < booking.endDay;
+    }
+
+    // Only a new booking in this atomic write can authorize a new slot.
+    function claimsSlot(property, key, slot) {
+      let path = bookingPath(property, slot.bookingId);
+      let booking = getAfter(path).data;
+      return !exists(path) && booking.status == 'active' && validSlot(key, slot, booking);
+    }
+
+    // Only an active-to-cancelled transition in this write can release a slot.
+    function releasesSlot(property, id) {
+      let path = bookingPath(property, id);
+      return get(path).data.status == 'active' && getAfter(path).data.status == 'cancelled';
+    }
+
+    match /properties/{property} {
+      match /members/{uid} {
+        allow get: if request.auth != null && (request.auth.uid == uid || hasRole(property, ['Owner']));
+        allow list: if hasRole(property, ['Owner']);
+        allow create: if hasRole(property, ['Owner']) && validStaffMembership(request.resource.data);
+        allow update: if hasRole(property, ['Owner']) && resource.data.role in ['Manager', 'Viewer'] &&
+          validStaffMembership(request.resource.data);
+        allow delete: if hasRole(property, ['Owner']) && resource.data.role in ['Manager', 'Viewer'];
+      }
+
+      function validStaffMembership(data) {
+        return data.keys().hasOnly(['role']) && data.role in ['Manager', 'Viewer'];
+      }
+
+      match /rooms/{room} {
+        allow read: if canRead(property);
+        // Room inventory is provisioned with the initial Owner for this prototype.
+      }
+
+      match /bookings/{id} {
+        allow read: if canRead(property);
+        allow create: if canBook(property) && validNewBooking(property, id, request.resource.data) &&
+          allSlotsMatch(property, id, request.resource.data, false);
+        allow update: if canBook(property) && resource.data.status == 'active' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledBy', 'cancelledAt']) &&
+          request.resource.data.status == 'cancelled' && request.resource.data.cancelledBy == request.auth.uid &&
+          request.resource.data.cancelledAt == request.time && allSlotsMatch(property, id, resource.data, true);
+      }
+
+      match /occupancy/{key} {
+        allow read: if canRead(property);
+        allow create: if request.auth != null && validBookingId(request.resource.data.bookingId) &&
+          claimsSlot(property, key, request.resource.data);
+        allow delete: if request.auth != null && releasesSlot(property, resource.data.bookingId);
+      }
+    }
+  }
+}

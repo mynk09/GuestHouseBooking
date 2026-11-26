@@ -1,5 +1,10 @@
 # Shared booking storage and migration plan
 
+The [Firebase Emulator prototype](../firebase-prototype/README.md) explores
+Firebase Authentication and Firestore for the shared backend. The Sheets and
+Postgres sections below describe the earlier proposal. The Android app still
+uses Room.
+
 ## Status
 
 The Android app now consumes BookingRepository. RoomBookingRepository is the
