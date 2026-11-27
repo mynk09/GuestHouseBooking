@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function hasRole(property, roles) {
+      return request.auth != null &&
+        get(/databases/$(db)/documents/properties/$(property)/members/$(request.auth.uid)).data.role in roles;
+    }
+
+    function canRead(property) {
+      return hasRole(property, ['Owner', 'Manager', 'Viewer']);
+    }
+
+    function staff(data) {
+      return data.keys().hasOnly(['role']) && data.role in ['Manager', 'Viewer'];
+    }
+
+    match /properties/{property} {
+      match /members/{uid} {
+        allow get: if request.auth != null && (request.auth.uid == uid || hasRole(property, ['Owner']));
+        allow list: if hasRole(property, ['Owner']);
+        allow create: if hasRole(property, ['Owner']) && staff(request.resource.data);
+        allow update: if hasRole(property, ['Owner']) && staff(resource.data) && staff(request.resource.data);
+        allow delete: if hasRole(property, ['Owner']) && staff(resource.data);
+      }
+
+      match /rooms/{room} {
+        allow read: if canRead(property);
+        match /reservations/{group} {
+          allow read: if canRead(property);
+        }
+      }
+
+      match /bookingGroups/{group} {
+        allow read: if canRead(property);
+      }
+    }
+  }
+}
