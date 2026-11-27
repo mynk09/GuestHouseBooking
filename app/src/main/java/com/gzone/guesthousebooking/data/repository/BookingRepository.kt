@@ -1,6 +1,7 @@
 package com.gzone.guesthousebooking.data.repository
 
 import com.gzone.guesthousebooking.data.model.Booking
+import java.util.Date
 import java.util.UUID
 
 class BookingRepository {
@@ -20,8 +21,8 @@ class BookingRepository {
     fun createBooking(
         guestName: String,
         roomNumber: Int,
-        checkInDate: java.util.Date,
-        checkOutDate: java.util.Date,
+        checkInDate: Date,
+        checkOutDate: Date,
         numberOfGuests: Int,
         contactNumber: String
     ): Booking {
